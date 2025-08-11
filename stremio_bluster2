@@ -1,95 +1,58 @@
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const pirateBay = require('thepiratebay');
 
-// <<< ALTERAÇÃO PRINCIPAL AQUI! >>>
-// Aumentamos o número de resultados por página para 200.
-const PAGE_SIZE = 200;
-
-const builder = new addonBuilder({
-    id: 'org.stremio.thepiratebay.plus.enhanced',
-    version: '1.1.0',
-    name: 'ThePirateBay+ Enhanced',
-    description: 'Provides torrent streams from ThePirateBay. Enhanced to show 200 results per page.',
-    resources: ['catalog', 'stream'],
+// --- Manifesto Simplificado ---
+// Recurso 'stream' foi REMOVIDO. Este addon só lida com catálogos.
+const manifest = {
+    id: 'community.tpb.catalog.replica', // ID único para nossa réplica
+    version: '1.0.0',
+    name: 'TPB Catálogo (Réplica)',
+    description: 'Réplica simples de um addon de catálogo do ThePirateBay.',
+    resources: ['catalog'], // APENAS CATÁLOGO
     types: ['movie', 'series'],
     catalogs: [
         { type: 'movie', id: 'tpb_top_movies', name: 'TPB Top Movies' },
         { type: 'series', id: 'tpb_top_series', name: 'TPB Top Series' }
     ]
-});
+};
 
-// Função para buscar no ThePirateBay
-async function searchTPB(type, page = 0) {
-    const category = type === 'movie' ? pirateBay.categories.VIDEO.MOVIES : pirateBay.categories.VIDEO.TV_SHOWS;
-    try {
-        const results = await pirateBay.topTorrents(category, page);
-        // Limitamos ao tamanho da página definido
-        return results.slice(0, PAGE_SIZE);
-    } catch (err) {
-        console.error('Error searching TPB:', err);
-        return [];
-    }
-}
+const builder = new addonBuilder(manifest);
 
-// Handler do Catálogo
-builder.defineCatalogHandler(async ({ type, id, extra }) => {
-    console.log(`Request for catalog: ${type} ${id}`);
-    const page = extra.skip ? Math.floor(extra.skip / PAGE_SIZE) : 0;
-    const results = await searchTPB(type, page);
-
-    const metas = results.map(torrent => {
-        return {
-            id: `tpb:${torrent.id}`,
-            type: type,
-            name: torrent.name,
-            posterShape: 'poster',
-            poster: `https://images.metahub.space/poster/medium/${torrent.name}/img`, // Placeholder poster
-            infoHash: torrent.infoHash // Adicionado para uso posterior
-        };
-    });
-
-    return { metas: metas };
-});
-
-// Handler do Stream
-builder.defineStreamHandler(async ({ type, id }) => {
-    console.log(`Request for streams: ${type} ${id}`);
-    if (!id.startsWith('tpb:')) {
-        return { streams: [] };
-    }
-
-    const torrentId = id.split(':')[1];
+// --- Lógica do Catálogo ---
+// Esta parte busca os torrents mais populares para a categoria pedida.
+builder.defineCatalogHandler(async ({ type, id }) => {
+    console.log(`Requisição de catálogo recebida para: ${type}`);
     
+    // Define a categoria de busca no TPB
+    const category = type === 'movie' ? pirateBay.categories.VIDEO.MOVIES : pirateBay.categories.VIDEO.TV_SHOWS;
+
     try {
-        const torrentDetails = await pirateBay.getTorrent(torrentId);
-        if (!torrentDetails || !torrentDetails.infoHash) {
-            return { streams: [] };
-        }
+        // A função topTorrents() por padrão busca os mais populares.
+        const results = await pirateBay.topTorrents(category);
 
-        const stream = {
-            infoHash: torrentDetails.infoHash,
-            name: 'ThePirateBay',
-            title: torrentDetails.name,
-            // Adiciona informações de seeders e leechers para o Stremio exibir
-            behaviorHints: {
-                bingeGroup: `tpb|${torrentDetails.infoHash}`,
-                notWebReady: true
-            },
-            sources: [
-              `tracker:udp://tracker.coppersurfer.tk:6969/announce`,
-              `tracker:udp://tracker.openbittorrent.com:6969/announce`,
-              `tracker:udp://9.rarbg.to:2710/announce`,
-            ]
-        };
+        // Mapeia os resultados para o formato que o Stremio entende
+        const metas = results.map(torrent => {
+            return {
+                id: `tpb:${torrent.id}`,
+                type: type,
+                name: torrent.name,
+                posterShape: 'poster',
+                // Usamos um serviço externo para tentar encontrar um poster
+                poster: `https://images.metahub.space/poster/medium/${torrent.name}/img`
+            };
+        });
+        
+        console.log(`Enviando ${metas.length} itens para o catálogo ${type}.`);
+        return { metas: metas };
 
-        return { streams: [stream] };
     } catch (err) {
-        console.error('Error getting torrent details:', err);
-        return { streams: [] };
+        console.error('Falha ao buscar torrents no The Pirate Bay:', err);
+        return { metas: [] }; // Retorna uma lista vazia em caso de erro
     }
 });
 
-// Inicia o servidor
+// --- Inicia o Servidor ---
 const port = process.env.PORT || 7000;
-serveHTTP(builder.getInterface(), { port });
-console.log(`Addon server started on port ${port}`);
+serveHTTP(builder.getInterface(), { port: port });
+console.log(`Addon de Réplica iniciado na porta ${port}`);
+console.log(`URL do Manifesto: http://127.0.0.1:${port}/manifest.json`);
