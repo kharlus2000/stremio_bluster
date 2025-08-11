@@ -1,7 +1,7 @@
 {
-  "name": "stremio-tpb-plus-enhanced",
-  "version": "1.1.0",
-  "description": "Stremio Addon for ThePirateBay with more results per page.",
+  "name": "stremio-tpb-replica",
+  "version": "1.0.0",
+  "description": "A replica of a simple TPB catalog addon for Stremio.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,8 +9,5 @@
   "dependencies": {
     "stremio-addon-sdk": "^1.6.8",
     "thepiratebay": "^1.4.5"
-  },
-  "engines": {
-    "node": "14.x"
   }
 }
